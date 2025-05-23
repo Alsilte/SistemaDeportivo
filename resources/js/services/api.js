@@ -1,175 +1,137 @@
- /**
- * SERVICIO API - Axios Configuration
- * 
- * Configuración central para todas las llamadas HTTP de la aplicación
- * Incluye interceptores para autenticación, manejo de errores y logging
- * 
- * Ubicación: resources/js/services/api.js
- */
-
-import axios from 'axios';
-import { useAppStore } from '@/stores/app';
+import axios from "axios";
+import { useToast } from "vue-toastification";
 
 // ============================================================================
-// CONFIGURACIÓN BASE DE AXIOS
+// CONFIGURACIÓN DE AXIOS
 // ============================================================================
 
-/**
- * Crear instancia de axios con configuración personalizada
- */
-const axiosInstance = axios.create({
-  // URL base para todas las peticiones API
-  baseURL: import.meta.env.VITE_API_URL || '/api',
-  
-  // Timeout para las peticiones
-  timeout: 30000, // 30 segundos
-  
-  // Headers por defecto
-  headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest'
-  },
-  
-  // Incluir cookies en las peticiones (para CSRF)
-  withCredentials: true
+const apiClient = axios.create({
+    baseURL: import.meta.env.VITE_API_URL || "/api",
+    timeout: 30000,
+    headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+    },
+    withCredentials: true,
 });
 
 // ============================================================================
-// INTERCEPTORES DE REQUEST
+// INTERCEPTORES
 // ============================================================================
 
-/**
- * Interceptor para peticiones salientes
- * Añade token de autenticación y otros headers necesarios
- */
-axiosInstance.interceptors.request.use(
-  (config) => {
-    // Obtener token del localStorage si existe
-    const token = localStorage.getItem('auth_token');
-    
-    // Añadir token de autorización si existe
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+// Interceptor para requests
+apiClient.interceptors.request.use(
+    (config) => {
+        // Agregar token de autenticación si existe
+        const token = localStorage.getItem("auth_token");
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+
+        // Agregar CSRF token si está disponible
+        const csrfToken = document.head.querySelector(
+            'meta[name="csrf-token"]'
+        );
+        if (csrfToken) {
+            config.headers["X-CSRF-TOKEN"] = csrfToken.getAttribute("content");
+        }
+
+        // Log en desarrollo
+        if (import.meta.env.DEV) {
+            console.log(
+                `🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`,
+                config.data
+            );
+        }
+
+        return config;
+    },
+    (error) => {
+        console.error("❌ Request Error:", error);
+        return Promise.reject(error);
     }
-    
-    // Añadir CSRF token si está disponible (útil para Laravel)
-    const csrfToken = document.head.querySelector('meta[name="csrf-token"]');
-    if (csrfToken) {
-      config.headers['X-CSRF-TOKEN'] = csrfToken.getAttribute('content');
-    }
-    
-    // Logging en desarrollo
-    if (import.meta.env.DEV) {
-      console.log('🚀 API Request:', config.method?.toUpperCase(), config.url, config.data);
-    }
-    
-    return config;
-  },
-  (error) => {
-    console.error('❌ Request Error:', error);
-    return Promise.reject(error);
-  }
 );
 
-// ============================================================================
-// INTERCEPTORES DE RESPONSE
-// ============================================================================
+// Interceptor para responses
+apiClient.interceptors.response.use(
+    (response) => {
+        // Log en desarrollo
+        if (import.meta.env.DEV) {
+            console.log(
+                `✅ API Response: ${response.status} ${response.config.url}`,
+                response.data
+            );
+        }
 
-/**
- * Interceptor para respuestas entrantes
- * Maneja errores globales y tokens expirados
- */
-axiosInstance.interceptors.response.use(
-  (response) => {
-    // Logging en desarrollo
-    if (import.meta.env.DEV) {
-      console.log('✅ API Response:', response.config.method?.toUpperCase(), 
-                  response.config.url, response.status, response.data);
-    }
-    
-    return response;
-  },
-  async (error) => {
-    const appStore = useAppStore();
-    
-    // Extraer información del error
-    const { response, config } = error;
-    const status = response?.status;
-    const data = response?.data;
-    
-    // Logging del error
-    console.error('❌ API Error:', {
-      url: config?.url,
-      method: config?.method,
-      status,
-      message: data?.message,
-      errors: data?.errors
-    });
-    
-    // Manejo específico por código de estado
-    switch (status) {
-      case 401:
-        // Token expirado o inválido
-        await handleUnauthorized();
-        break;
-        
-      case 403:
-        // Sin permisos
-        appStore.addNotification({
-          type: 'error',
-          title: 'Acceso Denegado',
-          message: data?.message || 'No tienes permisos para realizar esta acción'
+        return response;
+    },
+    async (error) => {
+        const toast = useToast();
+        const { response, config } = error;
+        const status = response?.status;
+        const data = response?.data;
+
+        // Log del error
+        console.error("❌ API Error:", {
+            url: config?.url,
+            method: config?.method,
+            status,
+            message: data?.message,
+            errors: data?.errors,
         });
-        break;
-        
-      case 404:
-        // Recurso no encontrado
-        if (!config.url.includes('/auth/me')) { // No mostrar para verificaciones de auth
-          appStore.addNotification({
-            type: 'error',
-            title: 'No Encontrado',
-            message: data?.message || 'El recurso solicitado no fue encontrado'
-          });
+
+        // Manejo específico por código de estado
+        switch (status) {
+            case 401:
+                // Token expirado o inválido
+                await handleUnauthorized();
+                break;
+
+            case 403:
+                // Sin permisos
+                if (!config.url?.includes("/auth/me")) {
+                    toast.error(
+                        data?.message ||
+                            "No tienes permisos para realizar esta acción"
+                    );
+                }
+                break;
+
+            case 404:
+                // Recurso no encontrado
+                if (!config.url?.includes("/auth/me")) {
+                    toast.error(data?.message || "Recurso no encontrado");
+                }
+                break;
+
+            case 422:
+                // Errores de validación - se manejan en los componentes
+                break;
+
+            case 429:
+                // Rate limiting
+                toast.warning(
+                    "Demasiadas peticiones. Por favor, espera un momento"
+                );
+                break;
+
+            case 500:
+                // Error interno del servidor
+                toast.error("Error interno del servidor. Intenta más tarde");
+                break;
+
+            default:
+                // Error de red u otros
+                if (!response) {
+                    toast.error(
+                        "Error de conexión. Verifica tu conexión a internet"
+                    );
+                }
         }
-        break;
-        
-      case 422:
-        // Errores de validación
-        handleValidationErrors(data?.errors);
-        break;
-        
-      case 429:
-        // Rate limiting
-        appStore.addNotification({
-          type: 'warning',
-          title: 'Muchas Peticiones',
-          message: 'Por favor, espera un momento antes de intentar de nuevo'
-        });
-        break;
-        
-      case 500:
-        // Error interno del servidor
-        appStore.addNotification({
-          type: 'error',
-          title: 'Error del Servidor',
-          message: 'Ocurrió un error interno. Por favor, intenta más tarde'
-        });
-        break;
-        
-      default:
-        // Error de red u otros
-        if (!response) {
-          appStore.addNotification({
-            type: 'error',
-            title: 'Error de Conexión',
-            message: 'No se pudo conectar con el servidor. Verifica tu conexión a internet'
-          });
-        }
+
+        return Promise.reject(error);
     }
-    
-    return Promise.reject(error);
-  }
 );
 
 // ============================================================================
@@ -180,264 +142,357 @@ axiosInstance.interceptors.response.use(
  * Manejar errores de autenticación (401)
  */
 async function handleUnauthorized() {
-  // Limpiar token local
-  localStorage.removeItem('auth_token');
-  
-  // Si estamos en una ruta protegida, redirigir al login
-  const currentRoute = window.location.pathname;
-  const publicRoutes = ['/login', '/register', '/forgot-password'];
-  
-  if (!publicRoutes.some(route => currentRoute.startsWith(route))) {
-    // Importación dinámica para evitar dependencias circulares
-    const { default: router } = await import('@/router');
-    router.push({ 
-      name: 'login', 
-      query: { redirect: currentRoute } 
-    });
-  }
-}
+    // Limpiar token local
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("user_data");
 
-/**
- * Manejar errores de validación (422)
- */
-function handleValidationErrors(errors) {
-  const appStore = useAppStore();
-  
-  if (errors && typeof errors === 'object') {
-    // Mostrar primer error de cada campo
-    Object.keys(errors).forEach(field => {
-      const fieldErrors = errors[field];
-      if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-        appStore.addNotification({
-          type: 'error',
-          title: `Error en ${field}`,
-          message: fieldErrors[0]
+    // Redirigir al login si no estamos ya ahí
+    const currentPath = window.location.pathname;
+    const publicPaths = ["/login", "/register", "/forgot-password"];
+
+    if (!publicPaths.some((path) => currentPath.startsWith(path))) {
+        // Importación dinámica para evitar dependencias circulares
+        const { default: router } = await import("@/router");
+        router.push({
+            name: "login",
+            query: { redirect: currentPath },
         });
-      }
-    });
-  }
+    }
 }
 
 // ============================================================================
-// FUNCIONES DE CONVENIENCIA PARA HTTP
+// CLASE API SERVICE
 // ============================================================================
 
-/**
- * Clase API con métodos de conveniencia
- */
 class ApiService {
-  constructor(axiosInstance) {
-    this.axios = axiosInstance;
-  }
-  
-  /**
-   * GET request
-   */
-  async get(url, config = {}) {
-    return this.axios.get(url, config);
-  }
-  
-  /**
-   * POST request
-   */
-  async post(url, data = {}, config = {}) {
-    return this.axios.post(url, data, config);
-  }
-  
-  /**
-   * PUT request
-   */
-  async put(url, data = {}, config = {}) {
-    return this.axios.put(url, data, config);
-  }
-  
-  /**
-   * PATCH request
-   */
-  async patch(url, data = {}, config = {}) {
-    return this.axios.patch(url, data, config);
-  }
-  
-  /**
-   * DELETE request
-   */
-  async delete(url, config = {}) {
-    return this.axios.delete(url, config);
-  }
-  
-  /**
-   * Upload de archivos
-   */
-  async upload(url, formData, onProgress = null) {
-    const config = {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      },
-      onUploadProgress: onProgress || null
-    };
-    
-    return this.axios.post(url, formData, config);
-  }
-  
-  /**
-   * Descargar archivos
-   */
-  async download(url, filename = null) {
-    const response = await this.axios.get(url, {
-      responseType: 'blob'
-    });
-    
-    // Crear URL temporal para descarga
-    const blob = new Blob([response.data]);
-    const downloadUrl = window.URL.createObjectURL(blob);
-    
-    // Crear y hacer clic en enlace temporal
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = filename || 'download';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // Limpiar URL temporal
-    window.URL.revokeObjectURL(downloadUrl);
-    
-    return response;
-  }
-  
-  /**
-   * Configurar token de autenticación
-   */
-  setAuthToken(token) {
-    if (token) {
-      this.axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    } else {
-      delete this.axios.defaults.headers.common['Authorization'];
+    constructor(axiosInstance) {
+        this.client = axiosInstance;
     }
-  }
-  
-  /**
-   * Limpiar token de autenticación
-   */
-  clearAuthToken() {
-    delete this.axios.defaults.headers.common['Authorization'];
-  }
-  
-  /**
-   * Obtener información del usuario autenticado
-   */
-  async getCurrentUser() {
-    return this.get('/auth/me');
-  }
-  
-  /**
-   * Cancelar peticiones pendientes
-   */
-  cancelPendingRequests() {
-    // Implementar si necesitas cancelar peticiones
-    // Requiere configurar cancel tokens
-  }
+
+    // ============================================================================
+    // MÉTODOS HTTP BÁSICOS
+    // ============================================================================
+
+    async get(url, config = {}) {
+        return this.client.get(url, config);
+    }
+
+    async post(url, data = {}, config = {}) {
+        return this.client.post(url, data, config);
+    }
+
+    async put(url, data = {}, config = {}) {
+        return this.client.put(url, data, config);
+    }
+
+    async patch(url, data = {}, config = {}) {
+        return this.client.patch(url, data, config);
+    }
+
+    async delete(url, config = {}) {
+        return this.client.delete(url, config);
+    }
+
+    // ============================================================================
+    // MÉTODOS ESPECIALES
+    // ============================================================================
+
+    /**
+     * Upload de archivos
+     */
+    async upload(url, formData, onProgress = null) {
+        const config = {
+            headers: {
+                "Content-Type": "multipart/form-data",
+            },
+        };
+
+        if (onProgress) {
+            config.onUploadProgress = (progressEvent) => {
+                const percentCompleted = Math.round(
+                    (progressEvent.loaded * 100) / progressEvent.total
+                );
+                onProgress(percentCompleted);
+            };
+        }
+
+        return this.client.post(url, formData, config);
+    }
+
+    /**
+     * Descargar archivos
+     */
+    async download(url, filename = null) {
+        const response = await this.client.get(url, {
+            responseType: "blob",
+        });
+
+        // Crear URL temporal para descarga
+        const blob = new Blob([response.data]);
+        const downloadUrl = window.URL.createObjectURL(blob);
+
+        // Crear y hacer clic en enlace temporal
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = filename || "download";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Limpiar URL temporal
+        window.URL.revokeObjectURL(downloadUrl);
+
+        return response;
+    }
+
+    /**
+     * Configurar token de autenticación
+     */
+    setAuthToken(token) {
+        if (token) {
+            this.client.defaults.headers.common[
+                "Authorization"
+            ] = `Bearer ${token}`;
+        } else {
+            delete this.client.defaults.headers.common["Authorization"];
+        }
+    }
+
+    /**
+     * Limpiar token de autenticación
+     */
+    clearAuthToken() {
+        delete this.client.defaults.headers.common["Authorization"];
+    }
+
+    // ============================================================================
+    // MÉTODOS DE PAGINACIÓN
+    // ============================================================================
+
+    /**
+     * Obtener datos paginados
+     */
+    async paginate(url, params = {}) {
+        const response = await this.get(url, { params });
+        return {
+            data: response.data.data?.data || response.data.data,
+            meta: response.data.data?.meta || response.data.meta,
+            links: response.data.data?.links || response.data.links,
+        };
+    }
+
+    /**
+     * Cargar más datos (scroll infinito)
+     */
+    async loadMore(nextPageUrl) {
+        if (!nextPageUrl) return null;
+        return this.get(nextPageUrl);
+    }
 }
 
 // ============================================================================
 // SERVICIOS ESPECÍFICOS POR MÓDULO
 // ============================================================================
 
-/**
- * Servicio para autenticación
- */
-export const authAPI = {
-  login: (credentials) => api.post('/auth/login', credentials),
-  register: (userData) => api.post('/auth/register', userData),
-  logout: () => api.post('/auth/logout'),
-  me: () => api.get('/auth/me'),
-  refresh: () => api.post('/auth/refresh'),
-  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
-  resetPassword: (data) => api.post('/auth/reset-password', data),
-};
+class AuthService extends ApiService {
+    async login(credentials) {
+        return this.post("/auth/login", credentials);
+    }
 
-/**
- * Servicio para torneos
- */
-export const torneosAPI = {
-  getAll: (params = {}) => api.get('/torneos', { params }),
-  getById: (id) => api.get(`/torneos/${id}`),
-  create: (data) => api.post('/torneos', data),
-  update: (id, data) => api.put(`/torneos/${id}`, data),
-  delete: (id) => api.delete(`/torneos/${id}`),
-  getClasificacion: (id) => api.get(`/torneos/${id}/clasificacion`),
-  getPartidos: (id) => api.get(`/torneos/${id}/partidos`),
-};
+    async register(userData) {
+        return this.post("/auth/register", userData);
+    }
 
-/**
- * Servicio para equipos
- */
-export const equiposAPI = {
-  getAll: (params = {}) => api.get('/equipos', { params }),
-  getById: (id) => api.get(`/equipos/${id}`),
-  create: (data) => api.post('/equipos', data),
-  update: (id, data) => api.put(`/equipos/${id}`, data),
-  delete: (id) => api.delete(`/equipos/${id}`),
-  getJugadores: (id) => api.get(`/equipos/${id}/jugadores`),
-  addJugador: (id, jugadorData) => api.post(`/equipos/${id}/jugadores`, jugadorData),
-  removeJugador: (id, jugadorId) => api.delete(`/equipos/${id}/jugadores/${jugadorId}`),
-};
+    async logout() {
+        return this.post("/auth/logout");
+    }
 
-/**
- * Servicio para partidos
- */
-export const partidosAPI = {
-  getAll: (params = {}) => api.get('/partidos', { params }),
-  getById: (id) => api.get(`/partidos/${id}`),
-  create: (data) => api.post('/partidos', data),
-  update: (id, data) => api.put(`/partidos/${id}`, data),
-  delete: (id) => api.delete(`/partidos/${id}`),
-  addEvento: (id, eventoData) => api.post(`/partidos/${id}/eventos`, eventoData),
-  updateResultado: (id, resultado) => api.patch(`/partidos/${id}/resultado`, resultado),
-};
+    async me() {
+        return this.get("/auth/me");
+    }
 
-/**
- * Servicio para usuarios
- */
-export const usuariosAPI = {
-  getProfile: () => api.get('/user/profile'),
-  updateProfile: (data) => api.put('/user/profile', data),
-  changePassword: (data) => api.put('/user/password', data),
-  uploadAvatar: (formData) => api.upload('/user/avatar', formData),
-};
+    async refresh() {
+        return this.post("/auth/refresh");
+    }
+
+    async forgotPassword(email) {
+        return this.post("/auth/forgot-password", { email });
+    }
+
+    async resetPassword(data) {
+        return this.post("/auth/reset-password", data);
+    }
+
+    async changePassword(data) {
+        return this.post("/auth/change-password", data);
+    }
+
+    async updateProfile(data) {
+        return this.put("/auth/profile", data);
+    }
+}
+
+class TorneosService extends ApiService {
+    async getAll(params = {}) {
+        return this.paginate("/torneos", params);
+    }
+
+    async getById(id) {
+        return this.get(`/torneos/${id}`);
+    }
+
+    async create(data) {
+        return this.post("/torneos", data);
+    }
+
+    async update(id, data) {
+        return this.put(`/torneos/${id}`, data);
+    }
+
+    async delete(id) {
+        return this.delete(`/torneos/${id}`);
+    }
+
+    async getClasificacion(id) {
+        return this.get(`/torneos/${id}/clasificacion`);
+    }
+
+    async getPartidos(id) {
+        return this.get(`/torneos/${id}/partidos`);
+    }
+
+    async inscribirEquipo(torneoId, equipoId, data = {}) {
+        return this.post(`/torneos/${torneoId}/inscribir-equipo`, {
+            equipo_id: equipoId,
+            ...data,
+        });
+    }
+
+    async generarFixture(id) {
+        return this.post(`/torneos/${id}/generar-fixture`);
+    }
+}
+
+class EquiposService extends ApiService {
+    async getAll(params = {}) {
+        return this.paginate("/equipos", params);
+    }
+
+    async getById(id) {
+        return this.get(`/equipos/${id}`);
+    }
+
+    async create(data) {
+        return this.post("/equipos", data);
+    }
+
+    async update(id, data) {
+        return this.put(`/equipos/${id}`, data);
+    }
+
+    async delete(id) {
+        return this.delete(`/equipos/${id}`);
+    }
+
+    async getJugadores(id) {
+        return this.get(`/equipos/${id}/jugadores`);
+    }
+
+    async addJugador(equipoId, jugadorData) {
+        return this.post(`/equipos/${equipoId}/jugadores`, jugadorData);
+    }
+
+    async updateJugador(equipoId, jugadorId, data) {
+        return this.put(`/equipos/${equipoId}/jugadores/${jugadorId}`, data);
+    }
+
+    async removeJugador(equipoId, jugadorId) {
+        return this.delete(`/equipos/${equipoId}/jugadores/${jugadorId}`);
+    }
+}
+
+class PartidosService extends ApiService {
+    async getAll(params = {}) {
+        return this.paginate("/partidos", params);
+    }
+
+    async getById(id) {
+        return this.get(`/partidos/${id}`);
+    }
+
+    async create(data) {
+        return this.post("/partidos", data);
+    }
+
+    async update(id, data) {
+        return this.put(`/partidos/${id}`, data);
+    }
+
+    async delete(id) {
+        return this.delete(`/partidos/${id}`);
+    }
+
+    async iniciar(id) {
+        return this.post(`/partidos/${id}/iniciar`);
+    }
+
+    async finalizar(id, data) {
+        return this.post(`/partidos/${id}/finalizar`, data);
+    }
+
+    async addEvento(partidoId, eventoData) {
+        return this.post(`/partidos/${partidoId}/eventos`, eventoData);
+    }
+
+    async getEventos(id) {
+        return this.get(`/partidos/${id}/eventos`);
+    }
+}
+
+class UsuariosService extends ApiService {
+    async getAll(params = {}) {
+        return this.paginate("/usuarios", params);
+    }
+
+    async getById(id) {
+        return this.get(`/usuarios/${id}`);
+    }
+
+    async create(data) {
+        return this.post("/usuarios", data);
+    }
+
+    async update(id, data) {
+        return this.put(`/usuarios/${id}`, data);
+    }
+
+    async delete(id) {
+        return this.delete(`/usuarios/${id}`);
+    }
+}
+
+// ============================================================================
+// INSTANCIAS DE SERVICIOS
+// ============================================================================
+
+const apiService = new ApiService(apiClient);
+const authService = new AuthService(apiClient);
+const torneosService = new TorneosService(apiClient);
+const equiposService = new EquiposService(apiClient);
+const partidosService = new PartidosService(apiClient);
+const usuariosService = new UsuariosService(apiClient);
 
 // ============================================================================
 // EXPORTACIONES
 // ============================================================================
 
-// Instancia principal del servicio API
-export const api = new ApiService(axiosInstance);
+export default apiService;
 
-// Exportar también la instancia de axios directamente si se necesita
-export default axiosInstance;
-
-/**
- * INSTRUCCIONES DE USO:
- * 
- * 1. En un componente Vue:
- *    import { api, torneosAPI } from '@/services/api';
- * 
- * 2. Uso básico:
- *    const response = await api.get('/endpoint');
- *    const torneos = await torneosAPI.getAll();
- * 
- * 3. Con manejo de errores:
- *    try {
- *      const data = await api.post('/endpoint', payload);
- *    } catch (error) {
- *      // Error ya fue manejado por el interceptor
- *      console.error('Error específico:', error);
- *    }
- * 
- * 4. Upload de archivos:
- *    const formData = new FormData();
- *    formData.append('file', file);
- *    await api.upload('/upload', formData, (progress) => {
- *      console.log('Progress:', progress);
- *    });
- */
+export {
+    apiClient,
+    authService,
+    torneosService,
+    equiposService,
+    partidosService,
+    usuariosService,
+};
