@@ -1,10 +1,16 @@
 import { defineConfig } from "vite";
+import laravel from "laravel-vite-plugin";
 import vue from "@vitejs/plugin-vue";
 import { resolve } from "path";
 
-// https://vitejs.dev/config/
 export default defineConfig({
-    plugins: [vue()],
+    plugins: [
+        laravel({
+            input: ["resources/sass/main.scss", "resources/js/app.js"],
+            refresh: true,
+        }),
+        vue(),
+    ],
 
     resolve: {
         alias: {
@@ -15,27 +21,25 @@ export default defineConfig({
 
     build: {
         outDir: "public/build",
+        manifest: true,
         rollupOptions: {
             input: {
                 main: resolve(__dirname, "resources/js/app.js"),
             },
         },
-        manifest: true,
     },
 
     server: {
         host: true,
         port: 5173,
-        hmr: {
-            host: "localhost",
-        },
+        hmr: { host: "localhost" },
         cors: true,
     },
 
     css: {
         preprocessorOptions: {
             scss: {
-                additionalData: `@import "@/assets/scss/variables.scss";`,
+                additionalData: `@import "sass/variables";`,
             },
         },
     },

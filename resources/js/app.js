@@ -5,7 +5,7 @@ import App from "./App.vue";
 import router from "./router";
 import Toast from "vue-toastification";
 import "vue-toastification/dist/index.css";
-import "./assets/scss/main.scss";
+import "../sass/main.scss";
 
 const app = createApp(App);
 

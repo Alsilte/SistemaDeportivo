@@ -22,8 +22,7 @@ onMounted(async () => {
 </script>
 
 <style lang="scss">
-@import "@/assets/scss/main.scss";
-
+@import "~sass/main.scss";
 .app {
     min-height: 100vh;
     display: flex;

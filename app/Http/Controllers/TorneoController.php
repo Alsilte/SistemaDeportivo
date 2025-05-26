@@ -32,7 +32,7 @@ class TorneoController extends Controller
   public function index(Request $request): JsonResponse
   {
     try {
-      $query = Torneo::with(['deporte', 'equipos']);
+      $query = Torneo::query();
 
       // Filtro por deporte
       if ($request->has('deporte_id')) {
@@ -65,13 +65,12 @@ class TorneoController extends Controller
 
       // Paginación
       $perPage = $request->get('per_page', 15);
-      $torneos = $query->paginate($perPage);
+
+      $torneos = $query->get();
 
       return response()->json([
-        'success' => true,
-        'data' => $torneos,
-        'message' => 'Torneos obtenidos exitosamente'
-      ]);
+        'data' => $torneos
+      ], 200);
     } catch (\Exception $e) {
       return response()->json([
         'success' => false,

@@ -293,7 +293,7 @@ class EquipoController extends Controller
 
       return response()->json([
         'success' => true,
-        'message' => 'Equipo eliminado exitosamente'
+        'message' => 'Equipo eliminado correctamente'
       ]);
     } catch (\Exception $e) {
       return response()->json([
