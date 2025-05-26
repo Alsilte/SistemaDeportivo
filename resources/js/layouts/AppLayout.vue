@@ -182,6 +182,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/../../../sass/mixins.scss';
 .app-layout {
   display: flex;
   min-height: 100vh;

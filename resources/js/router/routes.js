@@ -1,189 +1,249 @@
 /**
- * ROUTES.JS - Configuración de rutas Vue Router
- *
- * Archivo: resources/js/router/routes.js
- *
- * Definición de todas las rutas de la aplicación frontend
+ * ROUTER PRINCIPAL
+ * 
+ * Archivo: resources/js/router/index.js
  */
 
-// Importar componentes
-import Home from "../pages/Home.vue";
-import Login from "../pages/auth/Login.vue";
-import Register from "../pages/auth/Register.vue";
-import Dashboard from "../pages/Dashboard.vue";
+import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
-// Layouts
-import AuthLayout from "../layouts/AuthLayout.vue";
-import AppLayout from "../layouts/AppLayout.vue";
+// ============================================================================
+// LAYOUTS
+// ============================================================================
+import AuthLayout from '@/layouts/AuthLayout.vue'
+import AppLayout from '@/layouts/AppLayout.vue'
 
-// Páginas de gestión
-import Torneos from "../pages/torneos/Index.vue";
-import TorneoDetalle from "../pages/torneos/Show.vue";
-import TorneoCrear from "../pages/torneos/Create.vue";
+// ============================================================================
+// PÁGINAS DE AUTENTICACIÓN
+// ============================================================================
+import Login from '@/pages/auth/Login.vue'
+import Register from '@/pages/auth/Register.vue'
 
-import Equipos from "../pages/equipos/Index.vue";
-import EquipoDetalle from "../pages/equipos/Show.vue";
-import EquipoCrear from "../pages/equipos/Create.vue";
+// ============================================================================
+// PÁGINAS PRINCIPALES
+// ============================================================================
+import Dashboard from '@/pages/dashboard/Dashboard.vue'
 
-import Partidos from "../pages/partidos/Index.vue";
-import PartidoDetalle from "../pages/partidos/Show.vue";
+// Torneos
+import TorneoIndex from '@/pages/torneos/TorneoIndex.vue'
+import TorneoShow from '@/pages/torneos/TorneoShow.vue'
+import TorneoCreate from '@/pages/torneos/TorneoCreate.vue'
 
-import Usuarios from "../pages/usuarios/Index.vue";
-import UsuarioDetalle from "../pages/usuarios/Show.vue";
+// Equipos
+import EquipoIndex from '@/pages/equipos/EquipoIndex.vue'
+import EquipoShow from '@/pages/equipos/EquipoShow.vue'
+import EquipoCreate from '@/pages/equipos/EquipoCreate.vue'
 
-// Middleware de autenticación
-const requireAuth = (to, from, next) => {
-    const token = localStorage.getItem("auth_token");
-    if (!token) {
-        next("/login");
-    } else {
-        next();
-    }
-};
+// Partidos
+import PartidoIndex from '@/pages/partidos/PartidoIndex.vue'
+import PartidoShow from '@/pages/partidos/PartidoShow.vue'
 
-// Middleware para invitados (no autenticados)
-const requireGuest = (to, from, next) => {
-    const token = localStorage.getItem("auth_token");
-    if (token) {
-        next("/dashboard");
-    } else {
-        next();
-    }
-};
+// Usuarios
+import UsuarioIndex from '@/pages/usuarios/UsuarioIndex.vue'
+import UsuarioShow from '@/pages/usuarios/UsuarioShow.vue'
 
-// Middleware para roles específicos
-const requireRole = (roles) => {
-    return (to, from, next) => {
-        const userData = JSON.parse(localStorage.getItem("user_data") || "{}");
-        const userRole = userData.tipo_usuario;
+// Páginas de error
+import NotFound from '@/pages/errors/NotFound.vue'
 
-        if (roles.includes(userRole)) {
-            next();
-        } else {
-            next("/dashboard");
-        }
-    };
-};
+// ============================================================================
+// DEFINICIÓN DE RUTAS
+// ============================================================================
 
-// Definición de rutas
 const routes = [
-    {
-        path: "/",
-        component: AppLayout,
-        children: [
-            {
-                path: "",
-                name: "home",
-                component: Home,
-            },
-        ],
-    },
+  // Redirección inicial
+  {
+    path: '/',
+    redirect: '/dashboard'
+  },
 
-    // Rutas de autenticación
-    {
-        path: "/auth",
-        component: AuthLayout,
-        beforeEnter: requireGuest,
-        children: [
-            {
-                path: "/login",
-                name: "login",
-                component: Login,
-            },
-            {
-                path: "/register",
-                name: "register",
-                component: Register,
-            },
-        ],
-    },
+  // ========================================
+  // RUTAS DE AUTENTICACIÓN
+  // ========================================
+  {
+    path: '/auth',
+    component: AuthLayout,
+    meta: { requiresGuest: true },
+    children: [
+      {
+        path: '/login',
+        name: 'login',
+        component: Login,
+        meta: { title: 'Iniciar Sesión' }
+      },
+      {
+        path: '/register',
+        name: 'register',
+        component: Register,
+        meta: { title: 'Registrarse' }
+      }
+    ]
+  },
 
-    // Rutas protegidas
-    {
-        path: "/app",
-        component: AppLayout,
-        beforeEnter: requireAuth,
-        children: [
-            {
-                path: "/dashboard",
-                name: "dashboard",
-                component: Dashboard,
-            },
+  // ========================================
+  // RUTAS PROTEGIDAS
+  // ========================================
+  {
+    path: '/app',
+    component: AppLayout,
+    meta: { requiresAuth: true },
+    children: [
+      // Dashboard
+      {
+        path: '/dashboard',
+        name: 'dashboard',
+        component: Dashboard,
+        meta: { title: 'Dashboard' }
+      },
 
-            // Gestión de torneos
-            {
-                path: "/torneos",
-                name: "torneos.index",
-                component: Torneos,
-            },
-            {
-                path: "/torneos/crear",
-                name: "torneos.create",
-                component: TorneoCrear,
-                beforeEnter: requireRole(["administrador"]),
-            },
-            {
-                path: "/torneos/:id",
-                name: "torneos.show",
-                component: TorneoDetalle,
-                props: true,
-            },
+      // ========================================
+      // RUTAS DE TORNEOS
+      // ========================================
+      {
+        path: '/torneos',
+        name: 'torneos.index',
+        component: TorneoIndex,
+        meta: { title: 'Torneos' }
+      },
+      {
+        path: '/torneos/crear',
+        name: 'torneos.create',
+        component: TorneoCreate,
+        meta: { 
+          title: 'Crear Torneo',
+          requiresRole: 'administrador'
+        }
+      },
+      {
+        path: '/torneos/:id',
+        name: 'torneos.show',
+        component: TorneoShow,
+        props: true,
+        meta: { title: 'Ver Torneo' }
+      },
 
-            // Gestión de equipos
-            {
-                path: "/equipos",
-                name: "equipos.index",
-                component: Equipos,
-            },
-            {
-                path: "/equipos/crear",
-                name: "equipos.create",
-                component: EquipoCrear,
-                beforeEnter: requireRole(["administrador"]),
-            },
-            {
-                path: "/equipos/:id",
-                name: "equipos.show",
-                component: EquipoDetalle,
-                props: true,
-            },
+      // ========================================
+      // RUTAS DE EQUIPOS
+      // ========================================
+      {
+        path: '/equipos',
+        name: 'equipos.index',
+        component: EquipoIndex,
+        meta: { title: 'Equipos' }
+      },
+      {
+        path: '/equipos/crear',
+        name: 'equipos.create',
+        component: EquipoCreate,
+        meta: { 
+          title: 'Crear Equipo',
+          requiresRole: 'administrador'
+        }
+      },
+      {
+        path: '/equipos/:id',
+        name: 'equipos.show',
+        component: EquipoShow,
+        props: true,
+        meta: { title: 'Ver Equipo' }
+      },
 
-            // Gestión de partidos
-            {
-                path: "/partidos",
-                name: "partidos.index",
-                component: Partidos,
-            },
-            {
-                path: "/partidos/:id",
-                name: "partidos.show",
-                component: PartidoDetalle,
-                props: true,
-            },
+      // ========================================
+      // RUTAS DE PARTIDOS
+      // ========================================
+      {
+        path: '/partidos',
+        name: 'partidos.index',
+        component: PartidoIndex,
+        meta: { title: 'Partidos' }
+      },
+      {
+        path: '/partidos/:id',
+        name: 'partidos.show',
+        component: PartidoShow,
+        props: true,
+        meta: { title: 'Ver Partido' }
+      },
 
-            // Gestión de usuarios (solo administradores)
-            {
-                path: "/usuarios",
-                name: "usuarios.index",
-                component: Usuarios,
-                beforeEnter: requireRole(["administrador"]),
-            },
-            {
-                path: "/usuarios/:id",
-                name: "usuarios.show",
-                component: UsuarioDetalle,
-                props: true,
-                beforeEnter: requireRole(["administrador"]),
-            },
-        ],
-    },
+      // ========================================
+      // RUTAS DE USUARIOS (Solo administradores)
+      // ========================================
+      {
+        path: '/usuarios',
+        name: 'usuarios.index',
+        component: UsuarioIndex,
+        meta: { 
+          title: 'Usuarios',
+          requiresRole: 'administrador'
+        }
+      },
+      {
+        path: '/usuarios/:id',
+        name: 'usuarios.show',
+        component: UsuarioShow,
+        props: true,
+        meta: { 
+          title: 'Ver Usuario',
+          requiresRole: 'administrador'
+        }
+      }
+    ]
+  },
 
-    // Ruta 404 - debe ir al final
-    {
-        path: "/:pathMatch(.*)*",
-        name: "not-found",
-        component: () => import("../pages/NotFound.vue"),
-    },
-];
+  // ========================================
+  // PÁGINA 404
+  // ========================================
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: NotFound,
+    meta: { title: 'Página No Encontrada' }
+  }
+]
 
-export default routes;
+// ============================================================================
+// CREAR ROUTER
+// ============================================================================
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    } else {
+      return { top: 0 }
+    }
+  }
+})
+
+// ============================================================================
+// GUARDS DE NAVEGACIÓN
+// ============================================================================
+
+router.beforeEach(async (to, from, next) => {
+  const authStore = useAuthStore()
+  
+  // Actualizar título de la página
+  document.title = to.meta.title ? `${to.meta.title} - Sistema Deportivo` : 'Sistema Deportivo'
+  
+  // Verificar autenticación
+  if (to.meta.requiresAuth) {
+    if (!authStore.isAuthenticated) {
+      return next({ name: 'login', query: { redirect: to.fullPath } })
+    }
+    
+    // Verificar rol específico
+    if (to.meta.requiresRole && authStore.userRole !== to.meta.requiresRole) {
+      return next({ name: 'dashboard' })
+    }
+  }
+  
+  // Verificar si es solo para invitados
+  if (to.meta.requiresGuest && authStore.isAuthenticated) {
+    return next({ name: 'dashboard' })
+  }
+  
+  next()
+})
+
+export default router

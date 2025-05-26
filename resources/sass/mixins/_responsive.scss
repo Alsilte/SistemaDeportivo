@@ -1,0 +1,59 @@
+$breakpoints: (
+  'xs': 480px,
+  'sm': 640px,
+  'md': 768px,
+  'lg': 1024px,
+  'xl': 1280px,
+  '2xl': 1536px
+);
+
+// Mixin para responsive design
+@mixin respond-to($breakpoint) {
+  $size: map-get($breakpoints, $breakpoint);
+  
+  @if $size {
+    @if $breakpoint == 'xs' or $breakpoint == 'sm' {
+      @media (max-width: $size) {
+        @content;
+      }
+    } @else {
+      @media (min-width: $size) {
+        @content;
+      }
+    }
+  } @else {
+    @warn "Breakpoint `#{$breakpoint}` no está definido.";
+  }
+}
+
+// Mixins adicionales para responsive
+@mixin respond-between($min, $max) {
+  $min-size: map-get($breakpoints, $min);
+  $max-size: map-get($breakpoints, $max);
+  
+  @if $min-size and $max-size {
+    @media (min-width: $min-size) and (max-width: #{($max-size - 1px)}) {
+      @content;
+    }
+  }
+}
+
+@mixin respond-above($breakpoint) {
+  $size: map-get($breakpoints, $breakpoint);
+  
+  @if $size {
+    @media (min-width: calc(#{$size} + 1px)) {
+      @content;
+    }
+  }
+}
+
+@mixin respond-below($breakpoint) {
+  $size: map-get($breakpoints, $breakpoint);
+  
+  @if $size {
+    @media (max-width: calc(#{$size} - 1px)) {
+      @content;
+    }
+  }
+}

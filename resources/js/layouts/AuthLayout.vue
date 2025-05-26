@@ -83,6 +83,7 @@
 </script>
 
 <style lang="scss" scoped>
+@import '@/../../../sass/mixins.scss';
 .auth-layout {
     min-height: 100vh;
     display: flex;
